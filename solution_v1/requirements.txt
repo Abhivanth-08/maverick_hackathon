@@ -1,0 +1,14 @@
+streamlit
+fastapi
+networkx
+pydantic
+pandas
+requests
+httpx
+plotly
+pyvis
+streamlit-agraph
+sqlalchemy
+python-dotenv
+openai
+fpdf2
