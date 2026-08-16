@@ -1,0 +1,9 @@
+{
+  "name": "trialmatchai",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "dev": "npm --prefix frontend run dev",
+    "test": "npm --prefix frontend run build"
+  }
+}

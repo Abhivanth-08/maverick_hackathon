@@ -1,0 +1,1 @@
+Place official downloaded ClinicalTrials.gov JSON/CSV under `raw/` and Synthea FHIR/CSV under `raw/synthea/`. Keep raw files immutable and do not commit large datasets to Git. The repository intentionally ships without real patient data.
