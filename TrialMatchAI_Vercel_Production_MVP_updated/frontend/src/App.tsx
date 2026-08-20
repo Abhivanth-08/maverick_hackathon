@@ -2443,6 +2443,7 @@ function HackathonDemo() {
   const [matchResult, setMatchResult] = useState<any>(null);
   const [ragReasoning, setRagReasoning] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
   const [graphKey, setGraphKey] = useState(1); // To force iframe reload
   const patientId = 1;
 
@@ -2479,10 +2480,13 @@ function HackathonDemo() {
 
   async function simulateLab() {
     setLoading(true);
+    setSuccessMsg('');
     try {
-      await api<any>(`/api/patients/${patientId}/labs?test_name=Creatinine&value=2.5&unit=mg/dL`, { method: 'POST' });
+      await api<any>(`/api/patients/${patientId}/labs?test_name=Creatinine&value=1.0&unit=mg/dL`, { method: 'POST' });
+      await api<any>(`/api/patients/${patientId}/labs?test_name=AST&value=30&unit=U/L`, { method: 'POST' });
+      await api<any>(`/api/patients/${patientId}/labs?test_name=ECOG&value=0&unit=`, { method: 'POST' });
       setGraphKey(k => k + 1);
-      alert("Lab simulated: Creatinine = 2.5 mg/dL. Graph updated! Re-run match in Step 2.");
+      setSuccessMsg("Labs simulated: Creatinine = 1.0 mg/dL, AST = 30 U/L, ECOG = 0. Graph updated! Re-run match in Step 2.");
     } catch (e) {
       alert("Simulation failed");
     } finally {
@@ -2569,8 +2573,13 @@ function HackathonDemo() {
           <h3>Step 3: Dynamic Data Simulation</h3>
           <p>Simulate an incoming HL7/FHIR observation to see how the graph and rules adapt.</p>
           <div style={{ background: '#fffbe6', padding: '1rem', borderRadius: '8px', border: '1px solid #ffe58f' }}>
-            <p><strong>Incoming Message:</strong> LAB RESULT - Creatinine = 2.5 mg/dL</p>
-            <button onClick={simulateLab} disabled={loading}>Ingest HL7 Data into Graph</button>
+            <p><strong>Incoming Message:</strong> LAB RESULT - Creatinine = 1.0 mg/dL, AST = 30 U/L, ECOG = 0</p>
+            <button onClick={simulateLab} disabled={loading}>{loading ? 'Ingesting...' : 'Ingest HL7 Data into Graph'}</button>
+            {successMsg && (
+              <div style={{ marginTop: '1rem', padding: '10px', background: '#dcfce7', color: '#166534', borderRadius: '6px', fontSize: '13px', fontWeight: 500 }}>
+                ✓ {successMsg}
+              </div>
+            )}
           </div>
         </div>
       )}

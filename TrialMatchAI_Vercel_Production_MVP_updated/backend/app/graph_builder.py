@@ -49,7 +49,7 @@ def generate_patient_graph_html(db: Session, patient_id: int) -> str:
         G.add_node(node_id, label=f"Event:\n{e.event_type}\n{e.event_date}", color="#9C27B0", shape="ellipse")
         G.add_edge(root_id, node_id, label="HAD_EVENT")
         
-    net = Network(height="600px", width="100%", bgcolor="#222222", font_color="white", directed=True)
+    net = Network(height="600px", width="100%", bgcolor="#222222", font_color="white", directed=True, cdn_resources="remote")
     net.from_nx(G)
     
     # Enable physics for better layout
