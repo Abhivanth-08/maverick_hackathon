@@ -1,10 +1,11 @@
 import os
 import json
-from utils.config import LLM_API_KEY
+from utils.config import GROQ_API_KEY, LLM_MODEL
 from models.criteria import StructuredCriteria, CriterionNode
+from utils.anonymizer import redact_pii
 
 def extract_criteria(nct_id: str, eligibility_text: str) -> StructuredCriteria:
-    if not LLM_API_KEY:
+    if not GROQ_API_KEY:
         return StructuredCriteria(
             nct_id=nct_id,
             inclusion=[
@@ -15,8 +16,11 @@ def extract_criteria(nct_id: str, eligibility_text: str) -> StructuredCriteria:
             ]
         )
     
-    import openai
-    client = openai.OpenAI(api_key=LLM_API_KEY)
+    import groq
+    client = groq.Groq(api_key=GROQ_API_KEY)
+    
+    # Redact PII before passing to LLM
+    safe_text = redact_pii(eligibility_text[:2000])
     
     prompt = f"""Extract structured eligibility criteria from the following clinical trial text.
     Return JSON format EXACTLY matching this structure:
@@ -29,12 +33,12 @@ def extract_criteria(nct_id: str, eligibility_text: str) -> StructuredCriteria:
         ]
     }}
     Text:
-    {eligibility_text[:2000]}
+    {safe_text}
     """
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
         )

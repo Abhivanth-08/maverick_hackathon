@@ -3,8 +3,9 @@ from integrations.fhir import fetch_patients, fetch_patient_facts
 from ai.criteria_extractor import extract_criteria
 from core.rule_engine import evaluate_patient
 from audit.logger import log_evaluation
+from ai.graph_rag import graph_rag_reasoning
 
-st.title("Patient Screening")
+st.title("Patient Screening & GraphRAG")
 
 if 'selected_trial' not in st.session_state:
     st.warning("Please select a trial first in the Trial Search page.")
@@ -14,9 +15,9 @@ trial = st.session_state['selected_trial']
 st.markdown(f"### Evaluating against: {trial.nct_id}")
 
 if 'criteria' not in st.session_state or st.button("Extract Criteria (LLM)"):
-    with st.spinner("Extracting structured criteria..."):
+    with st.spinner("Extracting structured criteria securely..."):
         st.session_state['criteria'] = extract_criteria(trial.nct_id, trial.eligibility_criteria_text)
-    st.success("Criteria extracted!")
+    st.success("Criteria extracted and PII redacted (if any) via Microsoft Presidio!")
 
 st.json(st.session_state['criteria'].model_dump())
 
@@ -38,6 +39,11 @@ if 'patients' in st.session_state:
                 for trace in result['traces']:
                     log_evaluation(p.id, trial.nct_id, trace, result['overall'])
                     
+                # Generate GraphRAG Reasoning
+                with st.spinner("Generating GraphRAG reasoning..."):
+                    rag_reasoning = graph_rag_reasoning(p, st.session_state['criteria'], result)
+                    st.session_state[f'rag_{p.id}'] = rag_reasoning
+                    
             if f"eval_{p.id}" in st.session_state:
                 res = st.session_state[f"eval_{p.id}"]
                 if res['overall'] == 'POTENTIALLY ELIGIBLE':
@@ -51,3 +57,8 @@ if 'patients' in st.session_state:
                 for t in res['traces']:
                     icon = "✅" if t.status == "PASS" else "❌" if t.status == "FAIL" else "⚠"
                     st.markdown(f"{icon} **{t.concept} {t.operator} {t.target_value}** -> {t.message}")
+
+                if f"rag_{p.id}" in st.session_state:
+                    st.markdown("---")
+                    st.markdown("#### GraphRAG Reasoning")
+                    st.info(st.session_state[f"rag_{p.id}"])
