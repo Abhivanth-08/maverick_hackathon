@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useNavigate, Link, useLocation } from 'react-router-dom';
 import { api } from './lib/api';
 
@@ -10,24 +10,62 @@ function Protected({ children }: { children: any }) {
   return localStorage.getItem('tm_token') ? children : <Navigate to="/login" replace />;
 }
 
+function NavIcon({ name }: { name: string }) {
+  const icons: Record<string, ReactElement> = {
+    rocket: <path d="M12 2c1.5 2 2.5 5 2.5 8 0 1.5-.3 3-1 4.5L12 17l-1.5-2.5C9.8 13 9.5 11.5 9.5 10c0-3 1-6 2.5-8z M9 15l-2 2v3l3-1.5 M15 15l2 2v3l-3-1.5 M12 8a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />,
+    grid: <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />,
+    users: <path d="M17 20v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1 M12 11a4 4 0 100-8 4 4 0 000 8z M23 20v-1a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75" />,
+    flask: <path d="M9 3h6 M10 3v6l-5.5 9.5A2 2 0 006.2 21h11.6a2 2 0 001.7-2.5L14 9V3 M6.5 15h11" />,
+    chart: <path d="M3 3v18h18 M18 17V9 M13 17V5 M8 17v-4" />,
+    shield: <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />,
+  };
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {icons[name]}
+    </svg>
+  );
+}
+
 function Layout({ children }: { children: any }) {
   const nav = useNavigate();
+  const location = useLocation();
+
+  const links = [
+    { to: '/hackathon', label: 'Hackathon Pitch', icon: 'rocket', accent: true },
+    { to: '/dashboard', label: 'Overview', icon: 'grid' },
+    { to: '/patients', label: 'Patients', icon: 'users' },
+    { to: '/trials', label: 'Trials', icon: 'flask' },
+    { to: '/monitoring', label: 'Monitoring & Analytics', icon: 'chart' },
+    { to: '/audit', label: 'Audit Trail', icon: 'shield' },
+  ];
+
   return (
     <div className="app">
       <aside>
-        <h1>TrialMatch<span>AI</span></h1>
-        <p className="muted">Research screening platform</p>
+        <div className="brand-block">
+          <h1>TrialMatch<span>AI</span></h1>
+          <p className="muted">Research screening platform</p>
+        </div>
         <nav>
-          <Link to="/hackathon" style={{ color: '#0ea5e9', fontWeight: 'bold' }}>🚀 Hackathon Pitch</Link>
-          <Link to="/dashboard">Overview</Link>
-          <Link to="/patients">Patients</Link>
-          <Link to="/trials">Trials</Link>
-          <Link to="/monitoring">Monitoring & Analytics</Link>
-          <Link to="/audit">Audit Trail</Link>
+          {links.map(l => {
+            const active = location.pathname.startsWith(l.to);
+            return (
+              <Link
+                key={l.to}
+                to={l.to}
+                className={`nav-link${active ? ' active' : ''}${l.accent ? ' accent' : ''}`}
+              >
+                <NavIcon name={l.icon} />
+                <span>{l.label}</span>
+              </Link>
+            );
+          })}
         </nav>
-        <button className="ghost" onClick={() => { localStorage.removeItem('tm_token'); nav('/login'); }}>
-          Sign out
-        </button>
+        <div className="sidebar-footer">
+          <button className="ghost" onClick={() => { localStorage.removeItem('tm_token'); nav('/login'); }}>
+            Sign out
+          </button>
+        </div>
       </aside>
       <main>{children}</main>
     </div>
