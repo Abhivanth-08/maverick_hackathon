@@ -7,7 +7,7 @@ type Patient = { id: number; external_patient_id: string; sex?: string; date_of_
 type Trial = { id: number; nct_id: string; title: string; status?: string; phase?: string; conditions: string[] };
 
 function Protected({ children }: { children: any }) {
-  return localStorage.getItem('tm_token') ? children : <Navigate to="/login" replace />;
+  return children;
 }
 
 function NavIcon({ name }: { name: string }) {
@@ -62,9 +62,7 @@ function Layout({ children }: { children: any }) {
           })}
         </nav>
         <div className="sidebar-footer">
-          <button className="ghost" onClick={() => { localStorage.removeItem('tm_token'); nav('/login'); }}>
-            Sign out
-          </button>
+          {/* Sign out disabled for demo mode */}
         </div>
       </aside>
       <main>{children}</main>
@@ -2837,7 +2835,6 @@ function HackathonDemo() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
       <Route path="/hackathon" element={<Protected><HackathonDemo /></Protected>} />
       <Route path="/patients" element={<Protected><Patients /></Protected>} />
@@ -2845,7 +2842,7 @@ export default function App() {
       <Route path="/trials" element={<Protected><Trials /></Protected>} />
       <Route path="/monitoring" element={<Protected><Monitoring /></Protected>} />
       <Route path="/audit" element={<Protected><Audit /></Protected>} />
-      <Route path="*" element={<Navigate to={localStorage.getItem('tm_token') ? '/dashboard' : '/login'} replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }
