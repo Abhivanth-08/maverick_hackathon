@@ -54,7 +54,8 @@ class MatchDocumentGenerator:
                 "phase": trial.phase or "N/A",
                 "status": trial.status or "UNKNOWN",
                 "sponsor": trial.sponsor or "N/A",
-                "conditions": trial.conditions or []
+                "conditions": trial.conditions or [],
+                "eligibility_text": trial.eligibility_text or "No criteria details available."
             },
             "evaluation": {
                 "match_id": match_result.id,

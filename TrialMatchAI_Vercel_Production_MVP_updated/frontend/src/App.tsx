@@ -559,20 +559,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* 17. ARCHITECTURE DIAGRAM (COLLAPSIBLE AT BOTTOM) */}
-      <details style={{ marginTop: '24px', padding: '16px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-        <summary style={{ fontWeight: 700, cursor: 'pointer', color: '#475569' }}>
-          Educational Overview: How TrialMatchAI Works
-        </summary>
-        <div className="flow" style={{ marginTop: '16px' }}>
-          <b>SQL Database</b><i>→</i>
-          <b>ClinicalTrials.gov v2 API</b><i>→</i>
-          <b>Candidate Indexing</b><i>→</i>
-          <b>Eligibility Engine</b><i>→</i>
-          <b>Evidence Rationale</b><i>→</i>
-          <b>Export Document Report</b>
-        </div>
-      </details>
     </Layout>
   );
 }
@@ -617,6 +603,18 @@ function ReportDrivenPatientWorkflow({ onComplete, onCancel, initialPatientId }:
       setLoading(false);
     }
   }
+
+  const [candidateOptions, setCandidateOptions] = useState<any[]>([]);
+  const [selectedTrialId, setSelectedTrialId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (step === 5 && patientId) {
+      api<any>(`/api/patients/${patientId}/candidates`).then(res => {
+        setCandidateOptions(res.items || []);
+        if (res.items?.length) setSelectedTrialId(res.items[0].id);
+      });
+    }
+  }, [step, patientId]);
 
   async function handleUploadAndExtract() {
     if (!file || !patientId) return;
@@ -691,13 +689,14 @@ function ReportDrivenPatientWorkflow({ onComplete, onCancel, initialPatientId }:
   }
 
   async function handleRunMatching() {
-    if (!patientId) return;
+    if (!patientId || !selectedTrialId) return;
     setLoading(true);
     setError('');
 
     try {
-      const res = await api<any>(`/api/patients/${patientId}/match`, { method: 'POST' });
-      setMatchResults(res.matches || []);
+      await api<any>(`/api/screening/${patientId}/${selectedTrialId}`, { method: 'POST' });
+      const matches = await api<any[]>(`/api/matches/${patientId}`);
+      setMatchResults(matches);
       setStep(6);
     } catch (err: any) {
       setError(err.message || 'Trial matching failed');
@@ -1090,12 +1089,26 @@ function ReportDrivenPatientWorkflow({ onComplete, onCancel, initialPatientId }:
           <div style={{ fontSize: '48px', marginBottom: '12px' }}>✅</div>
           <h3 style={{ fontSize: '24px', margin: '0 0 8px', color: '#0f172a' }}>Patient Profile Successfully Saved</h3>
           <p className="muted" style={{ maxWidth: '600px', margin: '0 auto 24px' }}>
-            Clinical report data has been stored with complete provenance tracking and linked to Patient ID #{patientId}.
+            Please select a specific Clinical Trial to screen this patient against.
           </p>
 
+          <div style={{ maxWidth: '500px', margin: '0 auto 24px', textAlign: 'left' }}>
+            <label style={{ fontWeight: 600 }}>Select Clinical Trial Target:</label>
+            <select 
+              value={selectedTrialId || ''} 
+              onChange={e => setSelectedTrialId(Number(e.target.value))}
+              style={{ width: '100%', marginTop: '8px', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+            >
+              {candidateOptions.length === 0 && <option value="">Loading candidates...</option>}
+              {candidateOptions.map(t => (
+                <option key={t.id} value={t.id}>{t.nct_id} - {t.title}</option>
+              ))}
+            </select>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '24px' }}>
-            <button onClick={handleRunMatching} disabled={loading} style={{ background: '#0284c7', fontSize: '15px', padding: '14px 28px' }}>
-              {loading ? 'Screening Candidate Trials...' : 'Find Eligible Clinical Trials →'}
+            <button onClick={handleRunMatching} disabled={loading || !selectedTrialId} style={{ background: '#0284c7', fontSize: '15px', padding: '14px 28px' }}>
+              {loading ? 'Screening Trial...' : 'Screen Selected Trial →'}
             </button>
             <button onClick={onComplete} className="ghost" style={{ fontSize: '15px', padding: '14px 24px' }}>
               Done / Return to Patients List
@@ -1123,6 +1136,153 @@ function ReportDrivenPatientWorkflow({ onComplete, onCancel, initialPatientId }:
       )}
     </div>
   );
+}
+
+async function generatePDFReport(docData: any, patientId: number, matchId: number) {
+  try {
+    let ragRes = { reasoning: 'GraphRAG reasoning not available.' };
+    try {
+      ragRes = await api<any>(`/api/patients/${patientId}/graph_rag/${matchId}`);
+    } catch(e) {}
+
+    let graphHtml = '';
+    try {
+      const graphRes = await fetch(`/api/patients/${patientId}/graph`);
+      if (graphRes.ok) {
+        graphHtml = await graphRes.text();
+      }
+    } catch (e) {}
+
+    const base64Graph = btoa(unescape(encodeURIComponent(graphHtml)));
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return alert('Please allow popups to generate the PDF report.');
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>TrialMatchAI Clinical Report - ${docData.document_id}</title>
+          <style>
+            body { font-family: 'Inter', system-ui, sans-serif; padding: 40px; color: #0f172a; line-height: 1.6; max-width: 900px; margin: 0 auto; }
+            h1 { color: #0f172a; border-bottom: 3px solid #0284c7; padding-bottom: 8px; margin-bottom: 24px; }
+            h2 { color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-top: 32px; }
+            h3 { color: #334155; margin-top: 24px; }
+            .section { margin-bottom: 30px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+            th, td { padding: 12px; border: 1px solid #cbd5e1; text-align: left; }
+            th { background: #f8fafc; font-weight: 600; color: #475569; }
+            .pill { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; display: inline-block; }
+            .ELIGIBLE { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+            .NOT_ELIGIBLE { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+            .REQUIRES_REVIEW { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+            .rag-box { background: #f0f9ff; border-left: 4px solid #0284c7; padding: 20px; font-style: italic; border-radius: 0 8px 8px 0; margin-top: 16px; }
+            .graph-container { height: 600px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; margin-top: 16px; }
+            @media print {
+              body { padding: 0; }
+              .page-break { page-break-before: always; }
+              .graph-container { height: 800px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="section">
+            <h1>Clinical Trial Matching Evaluation Report</h1>
+            <div style="display: flex; justify-content: space-between; color: #64748b;">
+              <p><strong>Document ID:</strong> ${docData.document_id}</p>
+              <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>1. Patient Clinical Summary</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #f8fafc; padding: 16px; border-radius: 8px;">
+              <div><strong>External Patient ID:</strong> ${docData.patient.external_patient_id}</div>
+              <div><strong>Sex / Gender:</strong> ${docData.patient.sex}</div>
+              <div><strong>Date of Birth:</strong> ${docData.patient.date_of_birth}</div>
+              <div><strong>Conditions:</strong> ${docData.patient.conditions?.join(', ') || 'None'}</div>
+            </div>
+            
+            <h3>Recent Laboratory Panels & Scan Reports</h3>
+            ${docData.patient.recent_labs && docData.patient.recent_labs.length > 0 ? `
+            <table>
+              <tr><th>Lab Test</th><th>Result Value</th><th>Unit</th><th>Observed Date</th></tr>
+              ${docData.patient.recent_labs.map((l:any) => `<tr><td><strong>${l.test}</strong></td><td>${l.value}</td><td>${l.unit||''}</td><td>${l.date.split('T')[0]}</td></tr>`).join('')}
+            </table>
+            ` : '<p style="color: #64748b; font-style: italic;">No laboratory values on file.</p>'}
+          </div>
+
+          <div class="section">
+            <h2>2. Clinical Trial Target</h2>
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+              <p style="margin: 0 0 8px;"><strong>NCT ID:</strong> ${docData.trial.nct_id}</p>
+              <p style="margin: 0 0 8px;"><strong>Title:</strong> ${docData.trial.title}</p>
+              <p style="margin: 0 0 8px;"><strong>Study Phase:</strong> ${docData.trial.phase}</p>
+              <p style="margin: 0;"><strong>Overall Status:</strong> ${docData.trial.status}</p>
+            </div>
+            
+            <h3>Eligibility Criteria</h3>
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; max-height: 400px; overflow-y: hidden; font-size: 13px; white-space: pre-wrap;">
+              ${docData.trial.eligibility_text}
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>3. Matching Evaluation</h2>
+            <div style="display: flex; gap: 24px; margin-bottom: 24px;">
+              <div>
+                <p style="font-size: 12px; color: #64748b; margin: 0 0 4px; text-transform: uppercase;">Eligibility Status</p>
+                <div class="pill ${docData.evaluation.overall_status}">${docData.evaluation.overall_status}</div>
+              </div>
+              <div>
+                <p style="font-size: 12px; color: #64748b; margin: 0 0 4px; text-transform: uppercase;">Match Score</p>
+                <div style="font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1;">${docData.evaluation.ranking_score_percent}%</div>
+              </div>
+            </div>
+            <p><strong>Clinical Rationale:</strong> ${docData.evaluation.explanation}</p>
+            
+            <h3>Criteria Assessment Matrix</h3>
+            <table>
+              <tr><th>Decision</th><th>Criteria Rationale</th><th>Evidence Source</th><th>Confidence</th></tr>
+              ${docData.criteria_breakdown.map((c:any) => `<tr>
+                <td><span class="pill ${c.decision}">${c.decision}</span></td>
+                <td>${c.reason}</td>
+                <td>${c.evidence_source||'N/A'}</td>
+                <td>${c.confidence ? (c.confidence*100).toFixed(0)+'%' : 'N/A'}</td>
+              </tr>`).join('')}
+            </table>
+          </div>
+
+          <div class="page-break"></div>
+
+          <div class="section">
+            <h2>4. GraphRAG AI Reasoning</h2>
+            <p style="color: #64748b; font-size: 14px;">Generative AI explanation of the deterministic matching criteria based on the patient's clinical knowledge graph.</p>
+            <div class="rag-box">
+              ${ragRes.reasoning.replace(/\\n/g, '<br/>')}
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>5. Patient Knowledge Graph Snapshot</h2>
+            <p style="color: #64748b; font-size: 14px;">Interactive network visualization of patient conditions, labs, and matched trial criteria.</p>
+            <div class="graph-container">
+              <iframe src="data:text/html;base64,${base64Graph}" style="width:100%; height:100%; border:none;"></iframe>
+            </div>
+          </div>
+
+          <script>
+            setTimeout(() => {
+              window.print();
+            }, 3500);
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  } catch (err: any) {
+    alert("Error generating PDF report: " + err.message);
+  }
 }
 
 function Patients() {
@@ -1259,11 +1419,14 @@ function Patients() {
             </div>
             
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <button onClick={() => downloadDoc(`${docModal.document_id}.md`, docModal.markdown_document)}>
-                📥 Download Document (.md)
+              <button onClick={() => generatePDFReport(docModal, docModal.patient.id, docModal.evaluation.match_id)} style={{ background: '#0284c7' }}>
+                📄 Generate Professional PDF Report
+              </button>
+              <button onClick={() => downloadDoc(`${docModal.document_id}.md`, docModal.markdown_document)} className="ghost">
+                📥 Download Markdown
               </button>
               <button onClick={() => downloadDoc(`${docModal.document_id}.json`, JSON.stringify(docModal, null, 2))} className="ghost">
-                📥 Download Raw Clinical Data (.json)
+                📥 Download Raw JSON
               </button>
             </div>
 
@@ -1658,11 +1821,14 @@ function PatientDetail() {
             </div>
             
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <button onClick={() => downloadDoc(`${docModal.document_id}.md`, docModal.markdown_document)}>
-                📥 Download Document (.md)
+              <button onClick={() => generatePDFReport(docModal, docModal.patient.id, docModal.evaluation.match_id)} style={{ background: '#0284c7' }}>
+                📄 Generate Professional PDF Report
+              </button>
+              <button onClick={() => downloadDoc(`${docModal.document_id}.md`, docModal.markdown_document)} className="ghost">
+                📥 Download Markdown
               </button>
               <button onClick={() => downloadDoc(`${docModal.document_id}.json`, JSON.stringify(docModal, null, 2))} className="ghost">
-                📥 Download Raw Clinical Data (.json)
+                📥 Download Raw JSON
               </button>
             </div>
 
@@ -1684,6 +1850,16 @@ function Trials() {
   const [limit, setLimit] = useState(10);
   const [loading, setLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [selectedTrial, setSelectedTrial] = useState<any>(null);
+
+  async function openTrialDetails(nctId: string) {
+    try {
+      const t = await api<any>(`/api/trials/${nctId}`);
+      setSelectedTrial(t);
+    } catch (err: any) {
+      alert("Error fetching trial details: " + err.message);
+    }
+  }
 
   function refresh() {
     api<any>('/api/trials?limit=50').then(r => setRows(r.items));
@@ -1733,7 +1909,7 @@ function Trials() {
       <div className="panel table">
         <table>
           <thead>
-            <tr><th>NCT ID</th><th>Title</th><th>Status</th><th>Phase</th><th>Target Conditions</th></tr>
+            <tr><th>NCT ID</th><th>Title</th><th>Status</th><th>Phase</th><th>Target Conditions</th><th>Action</th></tr>
           </thead>
           <tbody>
             {rows.map(t => (
@@ -1743,11 +1919,44 @@ function Trials() {
                 <td><span className="pill met">{t.status || 'ACTIVE'}</span></td>
                 <td>{t.phase || '—'}</td>
                 <td>{t.conditions?.join(', ') || '—'}</td>
+                <td>
+                  <button onClick={() => openTrialDetails(t.nct_id)} style={{ padding: '4px 10px', fontSize: '12px', background: '#0284c7' }}>
+                    📄 View Full Details
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {selectedTrial && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.75)', display: 'grid', placeItems: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ background: '#fff', width: 'min(900px, 95vw)', maxHeight: '90vh', borderRadius: '16px', padding: '24px', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Trial Full Details: {selectedTrial.nct_id}</h3>
+              </div>
+              <button onClick={() => setSelectedTrial(null)} className="ghost" style={{ padding: '6px 12px' }}>Close Window</button>
+            </div>
+            
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
+                <p style={{ margin: '0 0 8px' }}><strong>Title:</strong> {selectedTrial.title}</p>
+                <p style={{ margin: '0 0 8px' }}><strong>Status:</strong> {selectedTrial.status}</p>
+                <p style={{ margin: '0 0 8px' }}><strong>Phase:</strong> {selectedTrial.phase}</p>
+                <p style={{ margin: '0' }}><strong>Conditions:</strong> {selectedTrial.conditions?.join(', ')}</p>
+              </div>
+              <div>
+                <h4 style={{ margin: '0 0 8px' }}>Eligibility Criteria</h4>
+                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', maxHeight: '300px', overflowY: 'auto', fontSize: '13px', whiteSpace: 'pre-wrap' }}>
+                  {selectedTrial.eligibility_text || 'No criteria details available.'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

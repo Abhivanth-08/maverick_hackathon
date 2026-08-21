@@ -14,6 +14,72 @@ By combining an Abstract Syntax Tree (AST) rule engine with an LLM-powered Knowl
 * **AI / NLP:** Groq (Llama-3 / OSS Models), Microsoft Presidio (PII/PHI Redaction)
 * **Knowledge Graph:** NetworkX, PyVis (Interactive HTML rendering)
 
+### 📊 System Architecture Diagram
+```mermaid
+flowchart TD
+    %% Define Styles
+    classDef frontend fill:#3b82f6,stroke:#1e3a8a,stroke-width:2px,color:#fff;
+    classDef backend fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff;
+    classDef ai fill:#8b5cf6,stroke:#4c1d95,stroke-width:2px,color:#fff;
+    classDef db fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff;
+    classDef external fill:#64748b,stroke:#334155,stroke-width:2px,color:#fff;
+
+    %% Client Layer
+    subgraph Client [Presentation Layer]
+        A[React Dashboard]:::frontend
+        B[PyVis Graph Renderer]:::frontend
+    end
+
+    %% External Data
+    subgraph ExtData [External Data Sources]
+        C[ClinicalTrials.gov]:::external
+        D[FHIR/HL7 Data]:::external
+    end
+
+    %% Security
+    subgraph Security [Privacy Layer]
+        I[MS Presidio PII Redaction]:::ai
+    end
+
+    %% Backend Layer
+    subgraph Core [FastAPI Core Engine]
+        E[Data Ingestion]:::backend
+        F[AST Criteria Compiler]:::backend
+        H[Knowledge Graph Builder]:::backend
+        G[Deterministic Matching]:::backend
+    end
+
+    %% AI Layer
+    subgraph Expl [Explainability Layer]
+        J[Groq LLM RAG]:::ai
+    end
+
+    %% Data Layer
+    subgraph DB [Persistence]
+        K[(Relational DB)]:::db
+    end
+
+    %% Relationships
+    D -->|Raw Patient Data| E
+    E -->|Unstructured Text| I
+    I -->|Anonymized Data| K
+    
+    C -->|Trial Criteria| F
+    F -->|AST Rules| K
+    
+    K -->|Structured Data| H
+    H -->|NetworkX Graph| G
+    K -->|AST Rules| G
+    
+    G -->|Deterministic Result| J
+    H -->|Graph Context| J
+    
+    J -->|Natural Language Rationale| A
+    G -->|Pass/Fail Traces| A
+    H -->|Interactive Graph HTML| B
+    B -.-> A
+```
+
 ---
 
 ## ⚙️ Detailed End-to-End Process Workflow

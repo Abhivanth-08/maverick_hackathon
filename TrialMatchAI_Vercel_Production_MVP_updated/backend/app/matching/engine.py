@@ -86,7 +86,9 @@ class MatchingEngine:
         base_score = (met_count * 10) - (unknown_count * 4) - (conflicting_count * 20) - (not_met_count * 30)
         evidence_bonus = sum(2 for _, _, _, e in results if e.get("source") in ("patient_labs", "patient_conditions", "patient_medications", "clinical_events"))
         recruitment_bonus = 5 if trial.status and "RECRUIT" in trial.status.upper() else 0
-        ranking_score = float(base_score + evidence_bonus + recruitment_bonus)
+        raw_score = float(base_score + evidence_bonus + recruitment_bonus)
+        max_possible = float((total_criteria * 10) + (total_criteria * 2) + 5) if total_criteria > 0 else 1.0
+        ranking_score = max(0.0, min(1.0, raw_score / max_possible))
 
         explanation = f"{met_count} criteria met; {not_met_count} not met; {unknown_count} unknown. Screening coverage: {screening_coverage}%."
 
